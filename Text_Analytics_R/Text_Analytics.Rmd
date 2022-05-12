@@ -1,0 +1,214 @@
+---
+title: "TEXT ANALYTICS"
+author: "Bharath"
+date: '2022-04-19'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+pacman::p_load(tidyverse, tidytext, lubridate, stringr, reshape2, wordcloud, textdata)
+```
+
+```{r}
+load(file='song_lyrics.rda')
+song_lyrics
+```
+1. Tokenize the lyrics variable, count the number of words in each song, and merge the
+total number of words in each song with the data (this will add a new column to the
+data). Print a few rows of the updated data set showing the total number of words in each
+song.
+
+
+
+```{r}
+for( i in 1:length(song_lyrics$lyrics)){
+  text_df <- tibble( text = song_lyrics$lyrics[i])
+  k=text_df %>% unnest_tokens(word, text)
+  
+  song_lyrics$count[i] = unlist(count(k))
+  
+}
+song_lyrics$count = unlist(song_lyrics$count)
+song_lyrics_count = song_lyrics[c("song","count")]
+head(song_lyrics)
+head(song_lyrics_count)
+```
+
+
+
+
+```{r}
+text_df <- tibble( text = song_lyrics$lyrics)
+
+text_df =text_df %>% unnest_tokens(word, text)
+```
+
+
+
+```{r}
+data("stop_words")
+stop_words
+filter(stop_words, lexicon == "bing")
+
+```
+
+
+
+```{r}
+text_df %>%
+  anti_join(stop_words) %>% 
+  count(word, sort = TRUE) %>% 
+  top_n(20) %>% 
+  ggplot(aes(fct_reorder(word, n), n)) + 
+  geom_col(fill="gold3", width = 0.6) +
+  coord_flip() +
+  labs(y="Frequency", x = NULL, title = "Most Frequent Words- Top 20")
+
+```
+```{r}
+text_df %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(sentiment, word, sort = TRUE) %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  ggplot(aes(fct_reorder(word, n), 
+             n, 
+             fill = sentiment)) +
+  geom_col(width = 0.4) +
+  coord_flip() +
+  facet_wrap(~ sentiment, scales = "free") +
+  labs(y= "Contribution to Sentiment", x = NULL)
+```
+```{r}
+text_df %>% # total no of positive and negative
+  inner_join(get_sentiments("bing")) %>%
+  count(sentiment, sort = TRUE)
+```
+
+
+```{r}
+m <- song_lyrics %>%
+count(song) %>%
+rename(words = n)
+m
+```
+```{r}
+song_lyrics_1 <- unnest_tokens(song_lyrics, word, lyrics) %>%
+left_join(m, by = 'song') ## left join to get all the song lyrics matched
+song_lyrics_1
+```
+
+```{r}
+song_lyrics_2 = inner_join(song_lyrics_1, get_sentiments("bing"))
+song_lyrics_2
+```
+
+
+-> Create sentiment scores using “bing” lexicon and count the number of sentiment words
+(number of positive and number of negative sentiment words, separately) in each song.
+Print two separate tables: (i) songs with the highest percentage of positive words; (ii)
+songs with the highest percentage of negative words.
+
+
+
+```{r}
+Neg_sen <- song_lyrics_2 %>%
+count(song, sentiment, count) %>%
+ungroup() %>%
+filter(sentiment == "negative") %>%
+mutate(percent = round((n / count)*100,2)) %>%
+rename("Sentiment count" = n)
+Neg_sen = Neg_sen[c("song","percent","sentiment")][order(-Neg_sen$percent),]
+
+```
+
+
+```{r}
+
+pos_sen <- song_lyrics_2 %>%
+count(song, sentiment, count) %>%
+ungroup() %>%
+filter(sentiment == "positive") %>%
+mutate(percent = round(  (n / count)*100,2)) %>%
+rename("Sentiment count" = n)
+pos_sen = pos_sen[c("song","percent","sentiment")][order(-pos_sen$percent),]
+```
+
+```{r}
+Neg_sen
+pos_sen
+
+```
+-> The songs "shake it off" and "shake shake shake shake your booty" has highest negative words percentage with (47.3% && 45.63%) and followed by "disturbia" ans so on.
+ The songs "diamonds" has highest positive word rate with (57.97%)
+
+
+3. Do songs with a higher percent of negative words rank higher on the Billboard chart
+(rank 1 is the highest and rank 100 is the lowest)? Answer this question by grouping
+songs in the following groups: 1-10, 11-20, ..., and 91-100. Use boxplots for each of these
+groups, with ranking groups on the x axis and percent of negative words on the y axis.
+
+```{r}
+rank <- song_lyrics_2 %>%
+filter(sentiment == "negative") %>%
+count(song, rank,count) %>%
+ungroup() %>%
+rename(negative_count = n)
+```
+
+
+```{r}
+rank1 = rank %>%
+mutate(percent = (negative_count / count)*100, rank = 10 * floor(rank / 10))
+```
+
+
+```{r}
+rank2 = rank1[order(-rank1$percent),]
+
+```
+
+```{r}
+ggplot(distinct(rank2), aes(as.factor(rank), percent)) +
+geom_boxplot()+
+xlab("Rank[1-100]")+
+ylab("negative words percentage")+
+ggtitle("Rank analysis")
+```
+-> There is a low percent of negative words at rank 1-10 and and also at 90-100.also there are songs with high negative words at top ranks. This tells us that negative words cannot describe the rank.
+
+
+4. Have the percent of positive words in a song increased over the decade? Answer this
+question by grouping songs over decades: 1960-1969, 1970-1979, ..., 2010-2019. Use
+boxplots for each of these groups, with decades on the x axis and the percent of positive
+words on the y-axis.
+
+
+```{r}
+year <- song_lyrics_2 %>%
+filter(sentiment == "positive") %>%
+count(song, year,count) %>%
+ungroup() %>%
+rename(negative_count = n) 
+
+
+year1 = year %>%
+mutate(percent = (negative_count / count)*100, year = 10 * floor(year / 10))
+
+
+year2 = year1[order(-year1$percent),]
+```
+
+
+
+```{r}
+ggplot(distinct(year1), aes(as.factor(year), percent)) +
+geom_boxplot()+
+xlab("years")+
+ylab("positive words percentage")+
+ggtitle("Year analysis")
+```
+-> on observing the above boxplot the positive trend is located from 1960 to 1970. Then after there is a decreasing trend is observed from 1970 to 2000 years. Then a small sloped positive trend is observed till 2010. On average  a decreasing trend is observed.
